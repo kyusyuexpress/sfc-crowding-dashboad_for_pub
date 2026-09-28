@@ -71,6 +71,7 @@ function loadClassroomInfo() {
         path.join(__dirname, "sfc_classrooms.json"),
         path.join(__dirname, "kyousitu_size.json"),
         path.join(__dirname, "staticfile_public", "sfc_classrooms.json"),
+        path.join(__dirname, "example-data", "kyousitu_size.json"),
         path.join(__dirname, "staticfile_public", "kyousitu_size.json")
     ].filter(Boolean);
 
@@ -97,7 +98,8 @@ function loadInboundBusTimetable() {
             __dirname,
             "staticfile_public",
             "kanachu_jikoku_from_shonandai.json"
-        )
+        ),
+        path.join(__dirname, "example-data", "kanachu_jikoku_from_shonandai.json")
     ].filter(Boolean);
 
     const filePath = candidates.find(function (candidate) {
