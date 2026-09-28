@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>キャンパス人数予報の設計</title>
+    <style>
+        :root {
+            --text: #1f2937;
+            --muted: #6b7280;
+            --line: #d1d5db;
+            --grid: #e5e7eb;
+            --soft: #f3f4f6;
+            --softer: #f9fafb;
+            --accent: #2563eb;
+            --accent-soft: #eff6ff;
+            --supply: #0d9488;
+            --supply-soft: #f0fdfa;
+            --warn: #b45309;
+            --warn-soft: #fffbeb;
+            --good: #166534;
+            --good-soft: #dcfce7;
+            --bad: #991b1b;
+            --bad-soft: #fee2e2;
+        }
+        body {
+            margin: 0;
+            padding: 0 16px 64px;
+            font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+            line-height: 1.8;
+            color: var(--text);
+            background-color: #ffffff;
+        }
+        main { max-width: 900px; margin: 0 auto; }
+        h1 { text-align: center; margin: 32px 0 4px; }
+        .subtitle { text-align: center; color: var(--muted); margin-top: 0; }
+        h2 {
+            margin-top: 56px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid #374151;
+            scroll-margin-top: 16px;
+        }
+        h2 .num {
+            display: inline-block;
+            min-width: 1.6em;
+            margin-right: 8px;
+            padding: 0 6px;
+            border-radius: 6px;
+            background-color: #374151;
+            color: #ffffff;
+            text-align: center;
+        }
+        h3 { margin-top: 28px; }
+        code, .math {
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: 0.92em;
+        }
+        code { padding: 1px 4px; background-color: var(--soft); border-radius: 4px; }
+        small { color: var(--muted); }
+        nav { margin-top: 16px; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        th, td {
+            padding: 6px 10px;
+            border: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+        }
+        th { background-color: var(--soft); }
+        .table-wrap { overflow-x: auto; }
+        .note {
+            padding: 12px 16px;
+            border-left: 4px solid #9ca3af;
+            background-color: var(--softer);
+        }
+        .note.warn { border-color: var(--warn); background-color: var(--warn-soft); }
+        .caption { margin-top: 4px; font-size: 0.85em; color: var(--muted); text-align: center; }
+        .draft {
+            display: inline-block;
+            padding: 0 10px;
+            border-radius: 999px;
+            background-color: var(--warn-soft);
+            color: var(--warn);
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .toc { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; font-size: 0.9em; }
+
+        /* 決定事項 */
+        .decisions td:first-child { white-space: nowrap; font-weight: bold; }
+        .decisions .new { color: var(--accent); font-size: 0.8em; font-weight: bold; margin-left: 4px; }
+
+        /* パイプライン */
+        .pipe {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            align-items: stretch;
+            margin: 20px 0 8px;
+        }
+        .pipe .box {
+            position: relative;
+            padding: 10px 12px;
+            border: 2px solid var(--line);
+            border-radius: 10px;
+            background-color: #ffffff;
+            line-height: 1.4;
+        }
+        .pipe .box b { display: block; margin-bottom: 4px; }
+        .pipe .box small { display: block; }
+        .pipe .box:not(:last-child)::after {
+            content: "→";
+            position: absolute;
+            right: -14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-weight: bold;
+            z-index: 1;
+        }
+        .pipe .in { border-color: var(--supply); background-color: var(--supply-soft); }
+        .pipe .model { border-color: var(--accent); background-color: var(--accent-soft); }
+        .pipe .obs { border-color: #374151; }
+        .loop {
+            margin: 0 0 8px;
+            padding: 6px 12px;
+            border: 2px dashed var(--accent);
+            border-radius: 10px;
+            color: var(--accent);
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        /* 数式 */
+        .eq {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin: 14px 0;
+        }
+        .eq .term {
+            padding: 6px 12px;
+            border: 2px solid var(--line);
+            border-radius: 8px;
+            background-color: #ffffff;
+            line-height: 1.3;
+            text-align: center;
+        }
+        .eq .term small { display: block; font-size: 0.75em; }
+        .eq .term.out { border-color: #374151; font-weight: bold; }
+        .eq .term.learn { border-color: var(--accent); background-color: var(--accent-soft); }
+        .eq .term.fixed { border-style: dashed; }
+        .eq .op { font-size: 1.3em; color: var(--muted); font-weight: bold; }
+        .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.85em; color: var(--muted); }
+        .legend span::before {
+            content: "";
+            display: inline-block;
+            width: 14px;
+            height: 10px;
+            margin-right: 4px;
+            border: 2px solid var(--line);
+            border-radius: 3px;
+            vertical-align: -1px;
+        }
+        .legend .l-learn::before { border-color: var(--accent); background-color: var(--accent-soft); }
+        .legend .l-fixed::before { border-style: dashed; }
+
+        svg.diagram { display: block; width: 100%; height: auto; margin: 0 auto; }
+
+        /* モデル案カード */
+        .models { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; margin: 16px 0; }
+        .model-card {
+            display: flex;
+            flex-direction: column;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background-color: #ffffff;
+            line-height: 1.55;
+        }
+        .model-card.ref { background-color: var(--softer); }
+        .model-card.rec { border: 2px solid var(--accent); }
+        .model-card header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+        .model-card .id {
+            padding: 0 8px;
+            border-radius: 6px;
+            background-color: #374151;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+        .model-card.rec .id { background-color: var(--accent); }
+        .model-card h4 { margin: 0; font-size: 1.02em; }
+        .model-card .math {
+            display: block;
+            margin: 6px 0 8px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background-color: var(--soft);
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .model-card ul { margin: 0; padding-left: 1.1em; font-size: 0.92em; }
+        .model-card li.pro::marker { content: "＋ "; color: var(--good); }
+        .model-card li.con::marker { content: "－ "; color: var(--bad); }
+        .model-card .tag { margin-top: auto; padding-top: 8px; font-size: 0.8em; color: var(--muted); }
+
+        /* 比較表 */
+        .compare th, .compare td { text-align: center; }
+        .compare td:first-child, .compare th:first-child { text-align: left; white-space: nowrap; }
+        .compare .g { background-color: var(--good-soft); color: var(--good); font-weight: bold; }
+        .compare .m { background-color: var(--warn-soft); color: var(--warn); font-weight: bold; }
+        .compare .b { background-color: var(--bad-soft); color: var(--bad); font-weight: bold; }
+
+        /* 導入順ロードマップ */
+        .road { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 16px 0; }
+        .road > div {
+            position: relative;
+            padding: 10px 12px 10px 16px;
+            border-top: 4px solid var(--accent);
+            line-height: 1.45;
+            font-size: 0.92em;
+        }
+        .road > div:nth-child(2) { border-color: #3b82f6; }
+        .road > div:nth-child(3) { border-color: #60a5fa; }
+        .road > div:nth-child(4) { border-color: #93c5fd; }
+        .road b { display: block; }
+        .road .when { color: var(--muted); font-size: 0.85em; }
+
+        /* ワイヤーフレーム */
+        .wires { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+        .wire {
+            border: 2px solid #374151;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+        .wire .bar {
+            padding: 4px 10px;
+            background-color: #374151;
+            color: #ffffff;
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: 0.9em;
+        }
+        .wire .body { padding: 10px; display: grid; gap: 8px; }
+        .wire .blk {
+            padding: 8px 10px;
+            border: 1px dashed var(--line);
+            border-radius: 8px;
+            background-color: var(--softer);
+        }
+        .wire .blk b { display: block; }
+        .wire .blk.main { border: 2px solid var(--accent); background-color: var(--accent-soft); }
+        .wire .blk.sub { border-color: var(--supply); background-color: var(--supply-soft); }
+        .wire svg { display: block; width: 100%; height: 56px; margin-top: 4px; }
+        .wire .rows { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; margin-top: 4px; }
+        .wire .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }
+
+        /* M7 */
+        .m7 {
+            margin: 20px 0;
+            padding: 18px 20px;
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            background-color: var(--accent-soft);
+        }
+        .m7 h3 { margin-top: 0; }
+        .m7 .formula {
+            display: block;
+            margin: 8px 0 12px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            font-family: ui-monospace, Menlo, monospace;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.7;
+        }
+        .m7 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .m7 .col { padding: 10px 14px; border-radius: 8px; background-color: #ffffff; }
+        .m7 .col h4 { margin: 0 0 4px; }
+        .m7 .col ul { margin: 0; padding-left: 1.2em; }
+        @media (max-width: 760px) { .m7 .cols { grid-template-columns: 1fr; } }
+
+        /* 未決事項 */
+        .open { counter-reset: q; list-style: none; padding: 0; }
+        .open li {
+            counter-increment: q;
+            position: relative;
+            margin-bottom: 8px;
+            padding: 8px 12px 8px 48px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            line-height: 1.55;
+        }
+        .open li::before {
+            content: "Q" counter(q);
+            position: absolute;
+            left: 10px;
+            top: 8px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        @media (max-width: 760px) {
+            .pipe { grid-template-columns: 1fr; }
+            .pipe .box:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -20px; transform: translateX(50%); }
+            .pipe { gap: 20px; }
+            .road { grid-template-columns: 1fr 1fr; }
+            .wires { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <nav><a href="./">← トップ（見本）</a> ・ <a href="mlstrategy.html">おまかせ予報の戦略</a></nav>
+        <h1>キャンパス人数予報の設計</h1>
+        <p class="subtitle"><span class="draft">検討中</span> 2026-09-28 時点の決定事項とモデル案の比較。本命は <a href="#m7">M7（統合案）</a></p>
+        <p class="toc">
+            <a href="#decisions">決定事項</a>
+            <a href="#problem">問題設定</a>
+            <a href="#limit">授業人数だけの限界</a>
+            <a href="#ident">学習できる変数</a>
+            <a href="#models">モデル案</a>
+            <a href="#m7">M7 統合案</a>
+            <a href="#compare">比較</a>
+            <a href="#ui">画面構成</a>
+            <a href="#open">未決事項</a>
+        </p>
+
+        <p>
+            メインを「バス混雑予測」から<strong>「キャンパス人数の現在＋予報」</strong>に切り替えます。
+            理由は、キャンパス人数には Wi-Fi の実測という<strong>正解データがある</strong>ためです。
+            バス混雑は正解データがないので、キャンパス人数の予報から計算するサブ扱いにします。
+        </p>
+
+        <h2 id="impl">実装の状況（2026-09-28）</h2>
+        <p class="note warn">
+            <strong>方針変更</strong>：トップ（<code>/</code>）はダミーデータで完成形を見せる見本にし、
+            予報の本命は勾配ブースティング（<a href="mlstrategy.html">おまかせ予報</a>）に切り替えました。
+            このページの M7 は  に残し、比べる相手の1つとして動かし続けます。
+            裏では学習用の生データをためています（<code>ml/README.md</code>）。
+        </p>
+        <div class="table-wrap">
+            <table class="decisions">
+                <tr><td>画面</td><td><code>/</code> はダミーデータの見本。M7 の実データ版は <code>/archive</code>（日別は <code>/archive/day/YYYY-MM-DD</code>）。旧ダッシュボードは <code>/old</code></td></tr>
+                <tr><td>計算の場所</td><td>Node サーバー内（<code>forecast.js</code>）。API は <code>/api/campus/overview</code> と <code>/api/campus/day/:date</code></td></tr>
+                <tr><td>モデル</td><td>M7。授業日のデータが3日分たまるまでは事前値、3日以上で b(t) と wₖ、8日以上で曜日係数、3週分で週の減衰を学習</td></tr>
+                <tr><td>定期実行</td><td>毎晩 22:00 に学習し直して1か月先まで予報。起動時にもその日の予報がなければ作る</td></tr>
+                <tr><td>保存</td><td><code>forecasts.csv</code>（過去の日は「前日までの最後の予報」だけ残す）、<code>model_params.json</code>、授業APIのキャッシュ <code>lectures/</code>。すべて <code>CROWD_DATA_DIR</code> の下</td></tr>
+                <tr><td>教室定員</td><td>本番は <code>private-data/kyousitu_size.json</code>。定員が分からない教室は50人として扱う</td></tr>
+            </table>
+        </div>
+
+        <h2 id="decisions">決定事項</h2>
+        <div class="table-wrap">
+            <table class="decisions">
+                <tr><th>項目</th><th>決定</th></tr>
+                <tr><td>予測の対象</td><td>キャンパス全体の人数（建物別は出さない）</td></tr>
+                <tr><td>予報の期間</td><td>1週間〜1か月先。学期が進むと出席が減る（初週は多い）ため</td></tr>
+                <tr><td>時間の刻み</td><td>予報は30分、現在の値は5分</td></tr>
+                <tr><td>入力</td><td>授業API（時間割と学事暦）。<strong>GTFS-RT と天候は当面使わない</strong></td></tr>
+                <tr><td>曜日と授業日の判定</td><td>学事暦の <code>status</code> と <code>effectiveDayCode</code> で判定（祝日や振替もこれで扱える）</td></tr>
+                <tr><td>端末 → 人の換算<span class="new">NEW</span></td><td>端末数 ÷ 1.5。夜間も常時つながっている分の除外は <code>/crowd</code> 側で対応予定</td></tr>
+                <tr><td>履修者数<span class="new">NEW</span></td><td>取得できない場合は、教室定員 × 推定履修率（定数）で代わりにする</td></tr>
+                <tr><td>モデルの作り方<span class="new">NEW</span></td><td>授業人数を土台にして係数をかける。係数はすべて学習できる形にする（案は下で比較）</td></tr>
+                <tr><td>評価</td><td>実測との誤差の絶対値（人）。<strong>画面にも表示する</strong></td></tr>
+                <tr><td>不確かさ</td><td>予報値は1本だけ出す（幅は出さない）</td></tr>
+                <tr><td>混み具合の表し方</td><td>人数 ＋ 色の濃さ（学期中の分布を基準にした相対値）</td></tr>
+                <tr><td>想定する端末<span class="new">NEW</span></td><td>PC</td></tr>
+                <tr><td>Wi-Fi データの正本</td><td>ダッシュボードの5分データ（<code>crowd_snapshots.csv</code>）</td></tr>
+                <tr><td>バス混雑</td><td>現在の実装を残しつつ、予報から計算した値を加える。置き場所はページ下部の欄と、日別ページの詳細</td></tr>
+                <tr><td>モデル<span class="new">NEW</span></td><td><a href="#m7">M7（統合案）</a>：出席率を「曜日係数 × 週の係数」の掛け算に分解し、時間方向のならし方の重みも学習する</td></tr>
+                <tr><td>人が決めるもの<span class="new">NEW</span></td><td>変数の選び方と見る範囲（前後 ±2 時間）だけ。係数の値・重みの形はデータが決める</td></tr>
+                <tr><td>ベース b(t)<span class="new">NEW</span></td><td>最初は授業日で1本。3週目以降に「b(t) × 曜日係数」を試す</td></tr>
+            </table>
+        </div>
+        <h3>仮採用（推奨案のまま進めている項目）</h3>
+        <div class="table-wrap">
+            <table class="decisions">
+                <tr><td>推定履修率 r</td><td>0.7（学期中のデータがない最初の数日にしか効かない）</td></tr>
+                <tr><td>最初の実装</td><td>M1 と M7 を同時に作り、第1週が終わったら M7 に切り替える</td></tr>
+                <tr><td>予報の保存</td><td>毎晩、1か月先までの予報を作って全部保存する。画面の誤差は「前日夜の予報」で計算</td></tr>
+                <tr><td>学習し直すタイミング</td><td>毎晩（予報を作る直前）</td></tr>
+                <tr><td>学習データ</td><td>学期中の全データ。学事暦で <code>closed</code> の日は除く</td></tr>
+                <tr><td>今後の予報の一覧</td><td>ピーク人数とその時刻 ＋ 色</td></tr>
+                <tr><td>色の基準</td><td>最初は今後1か月の予報ピークの三分位。実測が2週分たまったら実測の分布に切り替える</td></tr>
+                <tr><td>画面の誤差</td><td>トップは直近7授業日の平均、日別ページはその日の平均と30分ごとの誤差</td></tr>
+                <tr><td>過去データ</td><td>データがある全期間（休み期間も含む）</td></tr>
+            </table>
+        </div>
+
+        <h2 id="problem"><span class="num">1</span>問題設定</h2>
+        <p>「日付 <span class="math">d</span> の30分枠 <span class="math">t</span> に、キャンパスに何人いるか」を、その日の時間割から予測する回帰問題として扱います。</p>
+
+        <div class="pipe" role="img" aria-label="授業APIから特徴量を作りモデルで予報し、Wi-Fi実測と比べて誤差を出し、週ごとに再学習する流れ">
+            <div class="box in"><b>授業API</b><small>時間割・教室・学事暦<br>1か月先まで取得できる</small></div>
+            <div class="box in"><b>特徴量</b><small>30分枠ごとの授業人数 C(d,t)、第何週か w など</small></div>
+            <div class="box model"><b>モデル</b><small>下の M1〜M6 から選ぶ</small></div>
+            <div class="box model"><b>予報 ŷ(d,t)</b><small>30分刻み・1か月先まで</small></div>
+            <div class="box obs"><b>Wi-Fi 実測 y(d,t)</b><small>端末数 ÷ 1.5<br>→ 誤差 |y − ŷ|</small></div>
+        </div>
+        <div class="loop">↺ 実測がたまるたびに、係数を学習し直す</div>
+
+        <h3>授業人数 C(d,t) の作り方</h3>
+        <div class="eq">
+            <span class="term">教室の定員</span>
+            <span class="op">×</span>
+            <span class="term fixed">推定履修率 r<small>定数・仮置き</small></span>
+            <span class="op">=</span>
+            <span class="term">推定履修者数<small>授業ごと</small></span>
+        </div>
+        <div class="eq">
+            <span class="term">Σ 推定履修者数<small>30分枠 t に開講中の授業すべて</small></span>
+            <span class="op">=</span>
+            <span class="term out">C(d, t)</span>
+        </div>
+        <p class="note">
+            教室の定員データ（<code>sfc_classrooms.json</code> / <code>kyousitu_size.json</code>）は、いまリポジトリにサンプルしかありません。
+            下の図では、代わりに「開講中の授業数」を使っています。
+        </p>
+
+        <h2 id="limit"><span class="num">2</span>授業人数に係数をかけるだけでは足りない理由</h2>
+        <p>
+            10/5（月）の実際の時間割で、30分枠ごとの開講授業数を数えました。
+            「授業人数 × 係数」だけで予報すると、形はこの棒グラフのままになります。
+        </p>
+        <figure>
+            <svg class="diagram wide" viewBox="0 0 660 290" role="img" aria-label="10月5日月曜の30分ごとの開講授業数。昼休みの12時30分に0になり、時限の境目で段差がある。想定される実際の人数は滑らかに推移する">
+<line x1="48" y1="230.0" x2="630" y2="230.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="42" y="234.0" font-size="12" fill="var(--muted)" text-anchor="end">0</text>
+<line x1="48" y1="190.0" x2="630" y2="190.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="42" y="194.0" font-size="12" fill="var(--muted)" text-anchor="end">10</text>
+<line x1="48" y1="150.0" x2="630" y2="150.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="42" y="154.0" font-size="12" fill="var(--muted)" text-anchor="end">20</text>
+<line x1="48" y1="110.0" x2="630" y2="110.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="42" y="114.0" font-size="12" fill="var(--muted)" text-anchor="end">30</text>
+<line x1="48" y1="70.0" x2="630" y2="70.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="42" y="74.0" font-size="12" fill="var(--muted)" text-anchor="end">40</text>
+<line x1="48" y1="30.0" x2="630" y2="30.0" stroke="var(--grid)" stroke-width="1"/>
+<text x="42" y="34.0" font-size="12" fill="var(--muted)" text-anchor="end">50</text>
+<text x="48.0" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">8:00</text>
+<rect x="116.7" y="150.0" width="19.4" height="80.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="139.0" y="150.0" width="19.4" height="80.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<text x="137.5" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">10:00</text>
+<rect x="161.4" y="150.0" width="19.4" height="80.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="183.8" y="98.0" width="19.4" height="132.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="206.2" y="98.0" width="19.4" height="132.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="228.6" y="98.0" width="19.4" height="132.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<text x="227.1" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">12:00</text>
+<rect x="273.3" y="102.0" width="19.4" height="128.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="295.7" y="102.0" width="19.4" height="128.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="318.1" y="102.0" width="19.4" height="128.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<text x="316.6" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">14:00</text>
+<rect x="340.5" y="70.0" width="19.4" height="160.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="362.9" y="70.0" width="19.4" height="160.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="385.3" y="70.0" width="19.4" height="160.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="407.7" y="70.0" width="19.4" height="160.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<text x="406.2" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">16:00</text>
+<rect x="430.0" y="114.0" width="19.4" height="116.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="452.4" y="114.0" width="19.4" height="116.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="474.8" y="114.0" width="19.4" height="116.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="497.2" y="198.0" width="19.4" height="32.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<text x="495.7" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">18:00</text>
+<rect x="519.6" y="198.0" width="19.4" height="32.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<rect x="542.0" y="198.0" width="19.4" height="32.0" rx="2" fill="var(--accent)" opacity="0.85"/>
+<text x="585.2" y="248" font-size="12" fill="var(--muted)" text-anchor="middle">20:00</text>
+<path d="M48.0,214.0 L81.6,190.0 L115.2,142.0 L159.9,118.0 L204.7,94.0 L249.5,106.0 L294.2,86.0 L361.4,62.0 L417.3,70.0 L462.1,98.0 L506.9,150.0 L551.7,182.0 L607.6,206.0 L630.0,210.0" fill="none" stroke="var(--text)" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round"/>
+<line x1="260.7" y1="226" x2="260.7" y2="86.0" stroke="var(--warn)" stroke-width="1.5"/>
+<text x="260.7" y="78.0" font-size="13" font-weight="bold" fill="var(--warn)" text-anchor="middle">昼休みで 0</text>
+<text x="536.0" y="154.0" font-size="13" font-weight="bold" fill="var(--text)">想定（模式）</text>
+<text x="596.4" y="224.0" font-size="13" font-weight="bold" fill="var(--warn)" text-anchor="middle">夜も 0</text>
+<text x="48" y="18" font-size="12" fill="var(--muted)">開講中の授業数</text>
+<text x="630" y="266" font-size="12" fill="var(--muted)" text-anchor="end">時刻（30分枠）</text>
+</svg>
+            <figcaption class="caption">棒：授業API（2026-10-05）から数えた開講授業数　点線：実際の人数の想定（模式図で、実測ではありません）</figcaption>
+        </figure>
+        <div class="table-wrap">
+            <table>
+                <tr><th>ずれる場所</th><th>授業人数だけの予報</th><th>実際（想定）</th><th>足りないもの</th></tr>
+                <tr><td>昼休み（12:40–13:00）</td><td>0人</td><td>むしろ多い（食堂など）</td><td>授業の合間に残る人</td></tr>
+                <tr><td>時限の境目</td><td>階段状に急変する</td><td>なだらかに変わる</td><td>授業の前後に早めに来る人・残る人</td></tr>
+                <tr><td>朝・夜</td><td>0人</td><td>研究室・自習・サークル</td><td>授業以外の人（ベース）</td></tr>
+                <tr><td>学期の後半</td><td>第1週と同じ</td><td>減っていく</td><td>第何週かによる出席の変化</td></tr>
+            </table>
+        </div>
+        <p>
+            つまり「授業人数 × 係数」の式には<strong>限界があります</strong>。
+            授業人数を土台にしつつ、<strong>時間方向のならし</strong>と<strong>授業以外の人（ベース）</strong>を足す必要があります。
+            下の M2〜M5 は、それを段階的に足していった案です。
+        </p>
+
+        <h2 id="ident"><span class="num">3</span>学習できる変数・できない変数</h2>
+        <p>
+            目標は「すべての変数を機械学習で決める」ことですが、<strong>かけ算でつながった変数どうしは、データから区別できません</strong>。
+        </p>
+        <div class="eq">
+            <span class="term">Wi-Fi 端末数</span>
+            <span class="op">=</span>
+            <span class="term fixed">1.5<small>端末／人</small></span>
+            <span class="op">×</span>
+            <span class="term fixed">定員</span>
+            <span class="op">×</span>
+            <span class="term fixed">r<small>履修率</small></span>
+            <span class="op">×</span>
+            <span class="term learn">出席率<small>第何週かで変わる</small></span>
+            <span class="op">＋</span>
+            <span class="term learn">ベース</span>
+        </div>
+        <div class="legend"><span class="l-learn">データから学習する</span><span class="l-fixed">固定値（定数か外部データ）</span></div>
+        <p>
+            1.5 × r × 出席率 は、データからは<strong>1つの積</strong>としてしか推定できません。
+            たとえば、r を 0.8 から 0.4 に変えても、学習で出席率が2倍になり、予報はまったく同じになります。
+            そこで、
+        </p>
+        <ul>
+            <li><strong>1.5 と r は固定</strong>し、モデルは「推定履修者のうち何割が来ているか」を表す係数 <span class="math">a</span> を1つだけ学習する。</li>
+            <li>r の値が効くのは、学期中のデータがまだない最初の数日の予報と、係数 <span class="math">a</span> を解釈するときだけ。</li>
+            <li>1.5 や r を個別に確かめたいなら、別の正解データ（実際の履修者数、人手で数えた人数など）が必要。</li>
+        </ul>
+
+        <h2 id="models"><span class="num">4</span>モデル案</h2>
+        <p>
+            どの案も、30分枠ごとの実測 <span class="math">y(d,t)</span> に対する回帰として学習できます。
+            M1〜M5 は係数に対して線形なので、制約（係数は0以上など）付きの線形回帰で学習でき、1週間分程度のデータでも回ります。
+        </p>
+        <p class="legend" style="margin-bottom: 0;">記号：C(t) は30分枠 t の授業人数、b(t) は時間帯ごとのベース、w は学期の第何週か、g(w) は週による出席の変化</p>
+
+        <div class="models">
+            <article class="model-card ref">
+                <header><span class="id">M0</span><h4>前週の同じ曜日・同じ時刻</h4></header>
+                <span class="math">ŷ(d,t) = y(d − 7日, t)</span>
+                <ul>
+                    <li class="pro">学習が要らない。比較の基準（ベースライン）になる</li>
+                    <li class="con">1週間より先を予報できない。第1週は使えない</li>
+                </ul>
+                <div class="tag">参照用。他の案がこれに勝てるかを見る</div>
+            </article>
+
+            <article class="model-card">
+                <header><span class="id">M1</span><h4>授業人数 × 係数</h4></header>
+                <span class="math">ŷ = a · C(t)</span>
+                <ul>
+                    <li class="pro">いちばん単純。パラメータは1個</li>
+                    <li class="con">上の図のとおり、昼・朝・夜が0になり、階段状になる</li>
+                </ul>
+                <div class="tag">パラメータ 1</div>
+            </article>
+
+            <article class="model-card">
+                <header><span class="id">M2</span><h4>時間帯ごとのベースを足す</h4></header>
+                <span class="math">ŷ = b(t) + a · C(t)</span>
+                <ul>
+                    <li class="pro">朝・夜・昼休みの底上げを、時間帯ごとに学習できる</li>
+                    <li class="con">時限の境目の段差は残る</li>
+                </ul>
+                <div class="tag">パラメータ 約27（30分枠の数 ＋ 1）</div>
+            </article>
+
+            <article class="model-card">
+                <header><span class="id">M3</span><h4>授業人数を前後にならす</h4></header>
+                <span class="math">ŷ = b(t) + Σₖ wₖ · C(t − k)</span>
+                <ul>
+                    <li class="pro">授業の前後に早めに来る人・残る人を、重み wₖ として<strong>データから学習する</strong>。人が決めるのは見る範囲（k の範囲）だけで、ならし方の形は決めない</li>
+                    <li class="pro">段差と昼休みの谷が自然に埋まる</li>
+                    <li class="con">重みが負にならないよう、制約が必要</li>
+                </ul>
+                <div class="tag">パラメータ 約31。<a href="#m7">M7</a> に統合</div>
+            </article>
+
+            <article class="model-card">
+                <header><span class="id">M4</span><h4>今日の授業をすでに終えた人・これから受ける人</h4></header>
+                <span class="math">ŷ = b(t) + a₁C(t) + a₂C<sub>済</sub>(t) + a₃C<sub>後</sub>(t)</span>
+                <ul>
+                    <li class="pro">C<sub>済</sub>：今日すでに終わった授業の人数、C<sub>後</sub>：今日これから始まる授業の人数。「今日キャンパスにいる理由がある人」を表せる</li>
+                    <li class="con">同じ学生が複数の授業を取るので、二重に数える。その分は係数に吸収させる</li>
+                </ul>
+                <div class="tag">パラメータ 約30</div>
+            </article>
+
+            <article class="model-card">
+                <header><span class="id">M5</span><h4>1日の総量 × 1日の中での形</h4></header>
+                <span class="math">ŷ = D(d) · p(t | d)</span>
+                <ul>
+                    <li class="pro">D(d)：その日の総人数（当日の授業人数の合計から予測）、p：時間帯ごとの割合（授業パターンをならしたもの）。1日の水準と形を分けて学習できる</li>
+                    <li class="con">二段構えで、実装がやや複雑</li>
+                </ul>
+                <div class="tag">パラメータ 少なめ</div>
+            </article>
+
+            <article class="model-card">
+                <header><span class="id">M6</span><h4>勾配ブースティング（LightGBM など）</h4></header>
+                <span class="math">ŷ = f(C(t±k), C<sub>済</sub>, C<sub>後</sub>, t, 曜日, w, …)</span>
+                <ul>
+                    <li class="pro">非線形な関係も、変数どうしの組み合わせの効果も拾える</li>
+                    <li class="con">数週間分のデータが要る。1か月先への外挿（第何週かの効果）が苦手</li>
+                </ul>
+                <div class="tag">データが十分たまってから比較する。詳しくは <a href="mlstrategy.html">おまかせ予報の戦略</a></div>
+            </article>
+        </div>
+
+        <section class="m7" id="m7">
+            <h3>M7 統合案（採用）：出席率を係数に分解し、ならし方も学習する</h3>
+            <p>M2・M3 に、出席率を掛け算に分解した係数を組み合わせます。</p>
+            <span class="formula">ŷ(d,t) = b(t)                                   ← 授業以外の人
+       + exp(β曜日 + γ週) × Σₖ wₖ · C(d, t − k)   ← 授業由来の人
+                             k = −4〜+4（前後2時間）</span>
+            <div class="cols">
+                <div class="col">
+                    <h4>固定する（人が決める）</h4>
+                    <ul>
+                        <li>端末／人 1.5、推定履修率 r</li>
+                        <li>基準：月曜 = 1、第1週 = 1（係数は比率として学習）</li>
+                        <li>見る範囲：前後 ±2 時間</li>
+                        <li>重みのなめらかさの罰則の強さ（検証データで選ぶ）</li>
+                    </ul>
+                </div>
+                <div class="col">
+                    <h4>学習する（データが決める）</h4>
+                    <ul>
+                        <li>b(t)：時間帯ごとのベース（約30）</li>
+                        <li>wₖ：ならし方の重み（9）</li>
+                        <li>β曜日：曜日係数（4）</li>
+                        <li>γ週：週の係数（指数的な減衰なら1）</li>
+                    </ul>
+                </div>
+            </div>
+            <h4>ならし方もモデルが決める</h4>
+            <p>
+                前後の授業人数 C(t−4)…C(t+4) を<strong>別々の特徴量として渡し</strong>、重み wₖ を学習します。
+                「授業の何分前から来るか」「終わってからどれだけ残るか」は、学習した重みとして出てきます。
+                ならし方を人が固定すると情報が失われて学習しにくくなるので、人が決めるのは見る範囲だけにします。
+            </p>
+            <svg class="diagram" viewBox="0 0 520 200" style="max-width:560px" role="img" aria-label="学習された重みの例。授業中が最大で、授業の30分前と30分後から1時間後にも重みがある">
+                <line x1="40" y1="140" x2="508" y2="140" stroke="var(--line)"/>
+                <rect x="48" y="140.0" width="36" height="1.0" rx="3" fill="var(--accent)" opacity="0.7"/><text x="66.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">120分前</text><rect x="100" y="137.8" width="36" height="2.2" rx="3" fill="var(--accent)" opacity="0.7"/><text x="118.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">90分前</text><rect x="152" y="131.2" width="36" height="8.8" rx="3" fill="var(--accent)" opacity="0.7"/><text x="170.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">60分前</text><rect x="204" y="101.5" width="36" height="38.5" rx="3" fill="var(--accent)" opacity="0.7"/><text x="222.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">30分前</text><rect x="256" y="30.0" width="36" height="110.0" rx="3" fill="var(--accent)" opacity="0.95"/><text x="274.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">授業中</text><rect x="308" y="85.0" width="36" height="55.0" rx="3" fill="var(--accent)" opacity="0.7"/><text x="326.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">30分後</text><rect x="360" y="112.5" width="36" height="27.5" rx="3" fill="var(--accent)" opacity="0.7"/><text x="378.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">60分後</text><rect x="412" y="129.0" width="36" height="11.0" rx="3" fill="var(--accent)" opacity="0.7"/><text x="430.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">90分後</text><rect x="464" y="136.7" width="36" height="3.3" rx="3" fill="var(--accent)" opacity="0.7"/><text x="482.0" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">120分後</text>
+                <text x="144" y="186" font-size="12" fill="var(--text)" text-anchor="middle">← 次の授業のため早めに来る</text>
+                <text x="404" y="186" font-size="12" fill="var(--text)" text-anchor="middle">授業後も残る →</text>
+                <text x="40" y="16" font-size="12" fill="var(--muted)">重み wₖ（学習結果の例・架空）</text>
+            </svg>
+            <ul>
+                <li>パラメータは約45個。掛け算を含むので普通の線形回帰にはなりませんが、scipy の最小二乗や PyTorch で学習できます。</li>
+                <li>時計の時刻ごとの係数 δ(t) は wₖ と役割がかぶるので、最初は入れません。</li>
+                <li>データがたまったら、同じ特徴量を M6（勾配ブースティング）に渡して比べます。</li>
+            </ul>
+        </section>
+
+        <h3>第何週かによる出席の変化 g(w)</h3>
+        <p>M1〜M5 の授業の項（a や wₖ）に、共通のかけ算として足します。M7 の exp(γ週) がこれにあたります。どれも学習で決める前提です。</p>
+        <div class="table-wrap">
+            <table>
+                <tr><th>形</th><th>式</th><th>パラメータ</th><th>特徴</th></tr>
+                <tr><td>なし</td><td>g(w) = 1</td><td>0</td><td>第1週のデータしかないうちはこれ</td></tr>
+                <tr><td>指数的に減る</td><td>g(w) = exp(−λ(w − 1))</td><td>1</td><td>少ないデータでも推定でき、1か月先へも自然に延ばせる</td></tr>
+                <tr><td>下限ありで減る</td><td>g(w) = g∞ + (1 − g∞)·exp(−λ(w − 1))</td><td>2</td><td>「ある水準で下げ止まる」を表せる。数週分のデータが要る</td></tr>
+                <tr><td>週ごとに自由</td><td>g(1), g(2), …</td><td>週の数</td><td>形を仮定しないが、まだ来ていない週は予報できない</td></tr>
+            </table>
+        </div>
+
+        <h2 id="compare"><span class="num">5</span>比較</h2>
+        <div class="table-wrap">
+            <table class="compare">
+                <tr><th>案</th><th>昼・夜の底上げ</th><th>時限の境目のなめらかさ</th><th>1か月先</th><th>必要なデータ</th><th>解釈のしやすさ</th></tr>
+                <tr><td>M0 前週の同時刻</td><td class="g">◯</td><td class="g">◯</td><td class="b">×</td><td class="g">1週</td><td class="g">◯</td></tr>
+                <tr><td>M1 授業人数 × 係数</td><td class="b">×</td><td class="b">×</td><td class="g">◯</td><td class="g">数日</td><td class="g">◯</td></tr>
+                <tr><td>M2 ＋ベース</td><td class="g">◯</td><td class="b">×</td><td class="g">◯</td><td class="g">数日</td><td class="g">◯</td></tr>
+                <tr><td>M3 ＋前後にならす</td><td class="g">◯</td><td class="g">◯</td><td class="g">◯</td><td class="m">1週</td><td class="g">◯</td></tr>
+                <tr><td>M4 済・後の授業</td><td class="g">◯</td><td class="m">△</td><td class="g">◯</td><td class="m">1週</td><td class="m">△</td></tr>
+                <tr><td>M5 総量 × 形</td><td class="g">◯</td><td class="g">◯</td><td class="g">◯</td><td class="m">1〜2週</td><td class="m">△</td></tr>
+                <tr><td>M6 勾配ブースティング</td><td class="g">◯</td><td class="g">◯</td><td class="m">△</td><td class="b">数週〜</td><td class="b">×</td></tr>
+                <tr><td><strong>M7 統合案</strong></td><td class="g">◯</td><td class="g">◯</td><td class="g">◯</td><td class="m">1週（曜日は2〜3週）</td><td class="g">◯</td></tr>
+            </table>
+        </div>
+
+        <h3>導入の順番（案）</h3>
+        <div class="road">
+            <div><b>M1 ＋ 仮置きの係数</b><span class="when">10/1〜（データなし）</span><br>時間割だけで予報を出し始める</div>
+            <div><b>M7（b(t) と wₖ）</b><span class="when">第1週が終わったら</span><br>ベースとならしの重みを学習</div>
+            <div><b>M7 ＋ 曜日・週の係数</b><span class="when">第3週ごろ〜</span><br>曜日係数と週の減衰を学習。b(t) × 曜日係数も試す</div>
+            <div><b>M0・M6 と比べる</b><span class="when">第4週ごろ〜</span><br>誤差で見比べて、どの案を使うか決める</div>
+        </div>
+
+        <h2 id="ui"><span class="num">6</span>画面構成（PC を想定）</h2>
+        <p>ダミーデータで動く見本：<a href="./">/</a>（日別ページは <code>/#/day/2026-10-07</code> のような URL）</p>
+        <div class="wires">
+            <div class="wire">
+                <div class="bar">/　トップ</div>
+                <div class="body">
+                    <div class="blk main">
+                        <b>今日の予報グラフ</b>
+                        実測（実線）・予報（点線）・現在時刻の線・誤差 ±◯人
+                        <svg viewBox="0 0 200 56" preserveAspectRatio="none" aria-hidden="true">
+                            <path d="M0,50 C30,48 45,22 70,20 S95,18 100,16" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+                            <path d="M100,16 C120,12 140,14 160,30 S190,48 200,50" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4"/>
+                            <line x1="100" y1="0" x2="100" y2="56" stroke="#9ca3af" stroke-width="1"/>
+                        </svg>
+                    </div>
+                    <div class="blk">
+                        <b>今後の予報（数値）</b>
+                        <div class="rows">
+                            <span>10/6(火)</span><span>ピーク 14:30 ごろ</span><span><span class="dot" style="background:#1d4ed8"></span> 約◯人</span>
+                            <span>10/7(水)</span><span>ピーク 11:00 ごろ</span><span><span class="dot" style="background:#93c5fd"></span> 約◯人</span>
+                            <span>…</span><span>1か月先まで</span><span></span>
+                        </div>
+                        <small>行をクリックすると日別ページへ</small>
+                    </div>
+                    <div class="blk sub"><b>バス（サブ）</b>いま：現在の実装　この先：予報から計算した目安</div>
+                </div>
+            </div>
+            <div class="wire">
+                <div class="bar">/day/2026-10-06　日別ページ</div>
+                <div class="body">
+                    <div class="blk main">
+                        <b>その日のグラフ</b>
+                        予報（点線）、過去の日は実測（実線）も重ね、誤差を表示
+                        <svg viewBox="0 0 200 56" preserveAspectRatio="none" aria-hidden="true">
+                            <path d="M0,50 C30,46 45,20 70,18 S120,10 150,26 S190,48 200,50" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4"/>
+                            <path d="M0,52 C30,49 45,26 70,22 S120,14 150,30 S190,50 200,51" fill="none" stroke="#1f2937" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <div class="blk"><b>前の日・次の日へ移動</b>過去データも同じ形で見られる</div>
+                    <div class="blk sub"><b>その日のバスの目安</b>時間帯ごとの輸送力と、予報から計算した需要</div>
+                </div>
+            </div>
+        </div>
+
+        <h2 id="open"><span class="num">7</span>未決事項</h2>
+        <ol class="open">
+            <li>学期が始まってからの学習結果の確認（事前値の係数が大きく外れていないか）</li>
+            <li>正則化の強さ。架空データでの検証では、曜日係数と週の減衰が 0 側に少し引っ張られた</li>
+            <li>保存した予報の上限（何日分残すか）</li>
+            <li>旧 <code>/about</code> と <code>/archive</code> をいつ片付けるか</li>
+        </ol>
+
+        <nav><a href="./">← トップ（見本）</a> ・ <a href="mlstrategy.html">おまかせ予報の戦略</a> ・ <a href="about.html">旧・混雑予測のしくみ</a></nav>
+    </main>
+</body>
+</html>

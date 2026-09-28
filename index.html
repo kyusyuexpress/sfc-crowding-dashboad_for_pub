@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFCキャンパス人数（見本）</title>
+    <style>
+        :root {
+            --text: #1f2937;
+            --muted: #6b7280;
+            --faint: #9ca3af;
+            --line: #e5e7eb;
+            --line-strong: #d1d5db;
+            --soft: #f3f4f6;
+            --softer: #f9fafb;
+            --page: #f6f7f9;
+            --card: #ffffff;
+            --actual: #1f2937;
+            --forecast: #2563eb;
+            --now: #dc2626;
+            --shade-1: #dbeafe;
+            --shade-2: #93c5fd;
+            --shade-3: #2563eb;
+            --pos: #b91c1c;
+            --neg: #1d4ed8;
+            --lv1-bg: #dcfce7; --lv1-fg: #166534;
+            --lv2-bg: #fef9c3; --lv2-fg: #854d0e;
+            --lv3-bg: #ffedd5; --lv3-fg: #9a3412;
+            --lv4-bg: #fee2e2; --lv4-fg: #991b1b;
+            --lv0-bg: #e5e7eb; --lv0-fg: #374151;
+            --supply: #0d9488;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Hiragino Sans", sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--page);
+        }
+        a { color: var(--forecast); }
+        .dummy-banner {
+            padding: 6px 16px;
+            background-color: #fffbeb;
+            border-bottom: 1px solid #fde68a;
+            color: #92400e;
+            font-size: 0.85em;
+            text-align: center;
+        }
+        header.top {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 20px 24px 8px;
+        }
+        header.top h1 { margin: 0; font-size: 1.5em; }
+        header.top h1 a { color: inherit; text-decoration: none; }
+        header.top .meta { color: var(--muted); font-size: 0.9em; }
+        header.top .meta a { margin-left: 12px; }
+        main { max-width: 1120px; margin: 0 auto; padding: 0 24px 64px; }
+        .card {
+            margin-top: 16px;
+            padding: 18px 20px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background-color: var(--card);
+        }
+        .card h2 { margin: 0 0 4px; font-size: 1.1em; }
+        .card .sub { margin: 0 0 12px; color: var(--muted); font-size: 0.85em; }
+        .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+        .grid-2 > .card { margin-top: 16px; }
+
+        /* KPI */
+        .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+        .kpi {
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background-color: var(--card);
+        }
+        .kpi .label { color: var(--muted); font-size: 0.82em; }
+        .kpi .value { font-size: 1.8em; font-weight: bold; line-height: 1.2; font-variant-numeric: tabular-nums; }
+        .kpi .value small { font-size: 0.5em; font-weight: normal; color: var(--muted); margin-left: 2px; }
+        .kpi .note { color: var(--muted); font-size: 0.8em; }
+        .shade-chip {
+            display: inline-block;
+            padding: 0 8px;
+            border-radius: 999px;
+            font-size: 0.75em;
+            font-weight: bold;
+            vertical-align: 2px;
+        }
+        .s1 { background-color: var(--shade-1); color: #1e3a8a; }
+        .s2 { background-color: var(--shade-2); color: #1e3a8a; }
+        .s3 { background-color: var(--shade-3); color: #ffffff; }
+
+        /* chart */
+        .chart-wrap { position: relative; }
+        .chart-wrap svg { display: block; width: 100%; height: auto; }
+        .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; color: var(--muted); font-size: 0.82em; }
+        .legend i { display: inline-block; width: 22px; height: 0; margin-right: 6px; vertical-align: 4px; border-top: 2.5px solid; }
+        .legend i.a { border-color: var(--actual); }
+        .legend i.f { border-color: var(--forecast); border-top-style: dashed; }
+        .legend i.n { border-color: var(--now); width: 2px; height: 12px; border-top: none; border-left: 2px solid var(--now); vertical-align: -1px; }
+        .tooltip {
+            position: absolute;
+            pointer-events: none;
+            padding: 6px 10px;
+            border: 1px solid var(--line-strong);
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            font-size: 0.82em;
+            line-height: 1.5;
+            white-space: nowrap;
+            display: none;
+            font-variant-numeric: tabular-nums;
+        }
+        .tooltip b { display: block; }
+
+        /* 今後の予報 */
+        table.list { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+        table.list th {
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--line-strong);
+            color: var(--muted);
+            font-size: 0.8em;
+            font-weight: normal;
+            text-align: left;
+        }
+        table.list td { padding: 5px 8px; border-bottom: 1px solid var(--line); font-size: 0.9em; }
+        table.list tr.row { cursor: pointer; }
+        table.list tr.row:hover td { background-color: var(--softer); }
+        table.list tr.closed td { color: var(--faint); }
+        table.list tr.week-start td { border-top: 2px solid var(--line-strong); }
+        table.list .num { text-align: right; }
+        .peakbar { display: flex; align-items: center; gap: 8px; }
+        .peakbar .bar { height: 10px; border-radius: 3px; }
+        .peakbar span { min-width: 4.2em; text-align: right; }
+        .spark { display: block; width: 120px; height: 22px; }
+        .list-scroll { max-height: 520px; overflow-y: auto; }
+
+        /* カレンダー */
+        .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .cal .dow { color: var(--muted); font-size: 0.75em; text-align: center; }
+        .cal .day {
+            position: relative;
+            min-height: 46px;
+            padding: 3px 5px;
+            border-radius: 6px;
+            background-color: var(--soft);
+            color: var(--text);
+            font-size: 0.75em;
+            line-height: 1.25;
+            text-decoration: none;
+            font-variant-numeric: tabular-nums;
+        }
+        .cal .day:hover { outline: 2px solid var(--forecast); }
+        .cal .day.today { outline: 2px solid var(--now); }
+        .cal .day .d { font-weight: bold; }
+        .cal .day .p { display: block; margin-top: 2px; }
+        .cal .day.closed { background-color: var(--softer); color: var(--faint); }
+        .cal .day.future { background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255,255,255,0.35) 6px 9px); }
+        .cal .month { grid-column: 1 / -1; margin-top: 6px; font-weight: bold; font-size: 0.85em; }
+        .cal .blank { min-height: 46px; }
+        .scale { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--muted); font-size: 0.78em; flex-wrap: wrap; }
+        .scale span.sw { display: inline-block; width: 16px; height: 12px; border-radius: 3px; }
+
+        /* バス */
+        .bus-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .bus-dir h3 { margin: 0 0 8px; font-size: 0.95em; }
+        .bus-now {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background-color: var(--softer);
+            font-size: 0.88em;
+        }
+        .chip {
+            display: inline-block;
+            padding: 1px 10px;
+            border-radius: 999px;
+            font-size: 0.82em;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .lv1 { background-color: var(--lv1-bg); color: var(--lv1-fg); }
+        .lv2 { background-color: var(--lv2-bg); color: var(--lv2-fg); }
+        .lv3 { background-color: var(--lv3-bg); color: var(--lv3-fg); }
+        .lv4 { background-color: var(--lv4-bg); color: var(--lv4-fg); }
+        .lv0 { background-color: var(--lv0-bg); color: var(--lv0-fg); }
+        table.bus { width: 100%; border-collapse: collapse; font-size: 0.85em; font-variant-numeric: tabular-nums; }
+        table.bus th { color: var(--muted); font-weight: normal; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line-strong); }
+        table.bus td { text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+        table.bus th:first-child, table.bus td:first-child { text-align: left; }
+        table.bus td:last-child, table.bus th:last-child { text-align: center; }
+        .caveat { margin-top: 8px; color: var(--muted); font-size: 0.78em; }
+
+        /* 日別 */
+        .day-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 16px; }
+        .day-nav h2 { margin: 0; font-size: 1.35em; }
+        .day-nav .tag { margin-left: 8px; color: var(--muted); font-size: 0.6em; font-weight: normal; }
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            border: 1px solid var(--line-strong);
+            border-radius: 8px;
+            background-color: #ffffff;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.88em;
+        }
+        .btn:hover { background-color: var(--softer); }
+        .btn[aria-disabled="true"] { opacity: 0.35; pointer-events: none; }
+        .notice {
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-left: 4px solid var(--faint);
+            background-color: var(--softer);
+            color: var(--muted);
+            font-size: 0.88em;
+        }
+
+        @media (max-width: 900px) {
+            .grid-2, .bus-grid { grid-template-columns: 1fr; }
+            .kpis { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dummy-banner">
+        これは<strong>ダミーデータによる見本</strong>です。
+        曜日ごとの授業数と学事暦は授業APIの実データですが、人数・予報・誤差・バスの値はすべて架空です。
+        仮想の現在時刻は <strong id="nowLabel"></strong> です。
+    </div>
+    <header class="top">
+        <h1><a href="#/">SFCキャンパス人数</a></h1>
+        <div class="meta"><span id="updated"></span><a href="mlstrategy.html">予報のしくみ</a><a href="slides/omakase.pdf">解説スライド（PDF）</a></div>
+    </header>
+    <main id="app"></main>
+
+    <script>
+    // ===== 実データ（授業API）: 曜日コードごとの30分枠の開講授業数と学事暦 =====
+    const REAL = {"bins":["7:00","7:30","8:00","8:30","9:00","9:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","21:30"],"counts":{"4":[0,0,0,0,0,16,16,16,48,48,48,0,38,38,38,46,46,46,46,23,23,23,2,2,2,0,0,0,0,0],"5":[0,0,0,0,0,28,28,28,52,52,52,0,33,33,33,32,32,32,32,19,19,19,3,3,3,0,1,1,1,0],"1":[0,0,0,0,0,20,20,20,33,33,33,0,32,32,32,40,40,40,40,29,29,29,8,8,8,0,0,0,0,0],"2":[0,0,0,0,0,19,19,19,49,49,49,0,50,50,50,51,51,51,51,39,39,39,1,1,1,0,1,1,1,0],"3":[0,0,0,0,0,29,29,29,40,40,40,0,19,19,19,19,19,19,19,11,11,11,0,0,0,0,0,0,0,0]},"calendar":{"2026-09-22":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-23":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-24":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-25":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-26":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-27":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-28":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-29":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-09-30":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-01":{"status":"assumed","week":1,"dow":"4","reason":null},"2026-10-02":{"status":"assumed","week":1,"dow":"5","reason":null},"2026-10-03":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-04":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-05":{"status":"assumed","week":1,"dow":"1","reason":null},"2026-10-06":{"status":"assumed","week":1,"dow":"2","reason":null},"2026-10-07":{"status":"assumed","week":1,"dow":"3","reason":null},"2026-10-08":{"status":"assumed","week":2,"dow":"4","reason":null},"2026-10-09":{"status":"assumed","week":2,"dow":"5","reason":null},"2026-10-10":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-11":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-12":{"status":"assumed","week":2,"dow":"1","reason":null},"2026-10-13":{"status":"assumed","week":2,"dow":"2","reason":null},"2026-10-14":{"status":"assumed","week":2,"dow":"3","reason":null},"2026-10-15":{"status":"assumed","week":3,"dow":"4","reason":null},"2026-10-16":{"status":"assumed","week":3,"dow":"5","reason":null},"2026-10-17":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-18":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-19":{"status":"assumed","week":3,"dow":"1","reason":null},"2026-10-20":{"status":"assumed","week":3,"dow":"2","reason":null},"2026-10-21":{"status":"assumed","week":3,"dow":"3","reason":null},"2026-10-22":{"status":"assumed","week":4,"dow":"4","reason":null},"2026-10-23":{"status":"assumed","week":4,"dow":"5","reason":null},"2026-10-24":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-25":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-10-26":{"status":"assumed","week":4,"dow":"1","reason":null},"2026-10-27":{"status":"assumed","week":4,"dow":"2","reason":null},"2026-10-28":{"status":"assumed","week":4,"dow":"3","reason":null},"2026-10-29":{"status":"assumed","week":5,"dow":"4","reason":null},"2026-10-30":{"status":"assumed","week":5,"dow":"5","reason":null},"2026-10-31":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-11-01":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-11-02":{"status":"assumed","week":5,"dow":"1","reason":null},"2026-11-03":{"status":"assumed","week":5,"dow":"2","reason":null},"2026-11-04":{"status":"assumed","week":5,"dow":"3","reason":null},"2026-11-05":{"status":"assumed","week":6,"dow":"4","reason":null},"2026-11-06":{"status":"assumed","week":6,"dow":"5","reason":null},"2026-11-07":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-11-08":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-11-09":{"status":"assumed","week":6,"dow":"1","reason":null},"2026-11-10":{"status":"assumed","week":6,"dow":"2","reason":null},"2026-11-11":{"status":"assumed","week":6,"dow":"3","reason":null},"2026-11-12":{"status":"assumed","week":7,"dow":"4","reason":null},"2026-11-13":{"status":"assumed","week":7,"dow":"5","reason":null},"2026-11-14":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"},"2026-11-15":{"status":"closed","week":null,"dow":null,"reason":"通常授業なし"}}};
+
+    // ===== ダミーの設定 =====
+    const NOW = { date: "2026-10-14", minute: 13 * 60 + 10 };
+    const BINS = REAL.bins;                     // "7:00" .. "21:30"
+    const BIN_START = 7 * 60;
+    const BIN_MIN = 30;
+    const AVG_CAPACITY = 40;                    // 教室定員の平均（仮）
+    const ENROLL_RATE = 0.7;                    // 推定履修率 r（仮）
+    const DEVICES_PER_PERSON = 1.5;
+    const PARAMS = {
+        attendance: 0.55,
+        dow: { "1": 1.0, "2": 1.03, "3": 0.95, "4": 1.0, "5": 0.9 },
+        weekDecay: function (w) { return 0.72 + 0.28 * Math.exp(-0.35 * (w - 1)); },
+        // k = 授業の時刻から見てどれだけ後か（負 = 授業の前）
+        kernel: { "-2": 0.08, "-1": 0.35, "0": 1.0, "1": 0.5, "2": 0.25, "3": 0.1 }
+    };
+    const BUS = {
+        toShonandai: [4, 6, 6, 8, 8, 8, 8, 8, 8, 8, 8, 10, 8, 6, 6],  // 7時台〜21時台の本数（ダミー）
+        toSfc:       [10, 10, 8, 6, 6, 6, 6, 6, 6, 4, 4, 4, 4, 3, 2],
+        articulatedShare: 0.25,
+        busUseRate: 0.45
+    };
+    const LEVELS = [
+        { max: 0.5, label: "空いています", cls: "lv1" },
+        { max: 0.8, label: "やや混雑", cls: "lv2" },
+        { max: 1.0, label: "混雑", cls: "lv3" },
+        { max: Infinity, label: "非常に混雑", cls: "lv4" }
+    ];
+    const DOW_JA = ["日", "月", "火", "水", "木", "金", "土"];
+
+    // ===== 乱数（シード固定） =====
+    function hash(str) {
+        let h = 2166136261;
+        for (let i = 0; i < str.length; i += 1) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+        return h >>> 0;
+    }
+    function rng(seed) {
+        let s = seed >>> 0;
+        return function () {
+            s = (s + 0x6D2B79F5) >>> 0;
+            let t = s;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+    function gauss(r) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); }
+
+    // ===== 日付ユーティリティ =====
+    function parseDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); }
+    function fmtDate(dt) { return dt.toISOString().slice(0, 10); }
+    function addDays(s, n) { const dt = parseDate(s); dt.setUTCDate(dt.getUTCDate() + n); return fmtDate(dt); }
+    function dow(s) { return parseDate(s).getUTCDay(); }
+    function label(s) { const dt = parseDate(s); return (dt.getUTCMonth() + 1) + "/" + dt.getUTCDate() + "(" + DOW_JA[dt.getUTCDay()] + ")"; }
+    function minToStr(m) { return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); }
+    const DATES = Object.keys(REAL.calendar).sort();
+    const FIRST = DATES[0];
+    const LAST = DATES[DATES.length - 1];
+
+    // ===== M7 でダミーの人数を作る =====
+    function baseCurve(isClassDay, isWeekend) {
+        return BINS.map(function (_, i) {
+            const h = (BIN_START + i * BIN_MIN) / 60;
+            const day = Math.exp(-Math.pow((h - 14) / 4.2, 2));
+            if (isClassDay) return 60 + 260 * day;
+            if (isWeekend) return 40 + 25 * day;
+            return 45 + 110 * day;
+        });
+    }
+    function classPeople(date) {
+        const c = REAL.calendar[date];
+        if (!c || c.status === "closed" || !c.dow) return BINS.map(function () { return 0; });
+        const counts = REAL.counts[c.dow] || BINS.map(function () { return 0; });
+        const scale = AVG_CAPACITY * ENROLL_RATE * PARAMS.attendance *
+            (PARAMS.dow[c.dow] || 1) * PARAMS.weekDecay(c.week || 1);
+        return BINS.map(function (_, t) {
+            let s = 0;
+            Object.keys(PARAMS.kernel).forEach(function (k) {
+                const src = t - Number(k);
+                if (src >= 0 && src < counts.length) s += PARAMS.kernel[k] * counts[src];
+            });
+            return s * scale;
+        });
+    }
+    const cache = {};
+    function dayData(date) {
+        if (cache[date]) return cache[date];
+        const c = REAL.calendar[date] || {};
+        const isClassDay = c.status !== "closed";
+        const wd = dow(date);
+        const base = baseCurve(isClassDay, wd === 0 || wd === 6);
+        const cls = classPeople(date);
+        const forecast = base.map(function (b, i) { return Math.round(b + cls[i]); });
+        // 実測 = 予報 × 日ごとのずれ × 時間方向に相関したノイズ
+        const r = rng(hash(date));
+        const dayBias = 1 + 0.06 * gauss(r);
+        let e = 0;
+        const actualFull = forecast.map(function (f) {
+            e = 0.7 * e + 0.035 * gauss(r);
+            return Math.max(0, Math.round(f * dayBias * (1 + e) + 6 * gauss(r)));
+        });
+        let actual = null;
+        if (date < NOW.date) actual = actualFull;
+        else if (date === NOW.date) {
+            actual = actualFull.map(function (v, i) { return BIN_START + (i + 1) * BIN_MIN <= NOW.minute ? v : null; });
+        }
+        const d = { date: date, cal: c, isClassDay: isClassDay, forecast: forecast, actual: actual };
+        let peak = 0;
+        forecast.forEach(function (v, i) { if (v > forecast[peak]) peak = i; });
+        d.peakIdx = peak;
+        d.peak = forecast[peak];
+        if (actual) {
+            const errs = [];
+            actual.forEach(function (v, i) { if (v !== null) errs.push(Math.abs(v - forecast[i])); });
+            d.mae = errs.length ? errs.reduce(function (a, b) { return a + b; }, 0) / errs.length : null;
+        }
+        cache[date] = d;
+        return d;
+    }
+
+    // ===== 色の濃さ（予報ピークの分布の三分位） =====
+    const PEAKS = [];
+    for (let i = 0; i <= 31; i += 1) {
+        const dd = addDays(NOW.date, i);
+        if (dd > LAST) break;
+        const x = dayData(dd);
+        if (x.isClassDay) PEAKS.push(x.peak);
+    }
+    PEAKS.sort(function (a, b) { return a - b; });
+    const T1 = PEAKS[Math.floor(PEAKS.length / 3)];
+    const T2 = PEAKS[Math.floor(PEAKS.length * 2 / 3)];
+    function shade(v) { return v >= T2 ? 3 : v >= T1 ? 2 : 1; }
+    const SHADE_LABEL = { 1: "少なめ", 2: "ふつう", 3: "多め" };
+    const SHADE_COLOR = { 1: "var(--shade-1)", 2: "var(--shade-2)", 3: "var(--shade-3)" };
+
+    // ===== バスの目安 =====
+    function busTable(date, fromHour, toHour) {
+        const d = dayData(date);
+        const series = d.forecast;
+        const rows = [];
+        for (let h = fromHour; h <= toHour; h += 1) {
+            const i = (h * 60 - BIN_START) / BIN_MIN;
+            if (i < 0 || i + 2 >= series.length) continue;
+            const now = series[i], next = series[i + 2];
+            const turnover = 0.2 * now;
+            const leave = (Math.max(0, now - next) + turnover) * BUS.busUseRate;
+            const come = (Math.max(0, next - now) + turnover) * BUS.busUseRate;
+            const hi = h - 7;
+            const cap = function (n) { return Math.round(n * (1 - BUS.articulatedShare) * 70 + n * BUS.articulatedShare * 125); };
+            const nS = BUS.toShonandai[hi] || 0, nF = BUS.toSfc[hi] || 0;
+            rows.push({
+                hour: h,
+                leave: { n: nS, cap: cap(nS), demand: Math.round(leave) },
+                come: { n: nF, cap: cap(nF), demand: Math.round(come) }
+            });
+        }
+        return rows;
+    }
+    function level(demand, cap) {
+        if (!cap) return { label: "算出不能", cls: "lv0", ratio: null };
+        const ratio = demand / cap;
+        const lv = LEVELS.find(function (l) { return ratio <= l.max && !(l.max === 0.5 && ratio === 0.5); }) || LEVELS[3];
+        return { label: lv.label, cls: lv.cls, ratio: ratio };
+    }
+
+    // ===== SVG チャート =====
+    function lineChart(d, opts) {
+        const W = 1000, H = opts.height || 300, L = 52, R = 16, T = 16, B = 30;
+        const n = BINS.length;
+        const x = function (i) { return L + (W - L - R) * (i + 0.5) / n; };
+        const maxV = Math.max.apply(null, d.forecast.concat((d.actual || []).filter(function (v) { return v !== null; })));
+        const top = Math.ceil(maxV * 1.1 / 500) * 500 || 500;
+        const y = function (v) { return T + (H - T - B) * (1 - v / top); };
+        let s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + label(d.date) + 'の人数の推移">';
+        for (let v = 0; v <= top; v += top / 4) {
+            s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="var(--line)"/>';
+            s += '<text x="' + (L - 8) + '" y="' + (y(v) + 4) + '" font-size="12" fill="var(--muted)" text-anchor="end">' + v.toLocaleString() + "</text>";
+        }
+        for (let i = 0; i < n; i += 4) {
+            s += '<text x="' + x(i) + '" y="' + (H - 8) + '" font-size="12" fill="var(--muted)" text-anchor="middle">' + BINS[i] + "</text>";
+        }
+        if (opts.nowMinute != null) {
+            const xi = (opts.nowMinute - BIN_START) / BIN_MIN - 0.5;
+            const nx = L + (W - L - R) * (xi + 0.5) / n;
+            s += '<rect x="' + L + '" y="' + T + '" width="' + (nx - L) + '" height="' + (H - T - B) + '" fill="var(--softer)"/>';
+            s += '<line x1="' + nx + '" x2="' + nx + '" y1="' + T + '" y2="' + (H - B) + '" stroke="var(--now)" stroke-width="1.5"/>';
+            s += '<text x="' + (nx + 6) + '" y="' + (T + 12) + '" font-size="12" fill="var(--now)">いま ' + minToStr(opts.nowMinute) + "</text>";
+        }
+        const path = function (arr) {
+            let p = "", pen = false;
+            arr.forEach(function (v, i) {
+                if (v === null || v === undefined) { pen = false; return; }
+                p += (pen ? " L" : " M") + x(i).toFixed(1) + "," + y(v).toFixed(1);
+                pen = true;
+            });
+            return p;
+        };
+        s += '<path d="' + path(d.forecast) + '" fill="none" stroke="var(--forecast)" stroke-width="2.5" stroke-dasharray="7 5"/>';
+        if (d.actual) s += '<path d="' + path(d.actual) + '" fill="none" stroke="var(--actual)" stroke-width="2.5"/>';
+        const pk = d.peakIdx;
+        s += '<circle cx="' + x(pk) + '" cy="' + y(d.forecast[pk]) + '" r="4" fill="var(--forecast)"/>';
+        const labelTop = Math.min(y(d.forecast[pk]), d.actual && d.actual[pk] != null ? y(d.actual[pk]) : Infinity);
+        s += '<text x="' + x(pk) + '" y="' + (labelTop - 12) + '" font-size="12" fill="var(--forecast)" text-anchor="middle">予報ピーク ' + d.forecast[pk].toLocaleString() + "人</text>";
+        s += '<rect class="hit" x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '" fill="transparent"/>';
+        s += '<line class="cursor" x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '" stroke="var(--faint)" stroke-dasharray="3 3" visibility="hidden"/>';
+        s += "</svg>";
+        return { svg: s, geom: { W: W, L: L, R: R, n: n } };
+    }
+    function errorChart(d) {
+        const W = 1000, H = 120, L = 52, R = 16, T = 10, B = 22;
+        const n = BINS.length;
+        const bw = (W - L - R) / n;
+        const errs = d.actual.map(function (v, i) { return v === null ? null : v - d.forecast[i]; });
+        const m = Math.max(50, Math.max.apply(null, errs.filter(function (v) { return v !== null; }).map(Math.abs)));
+        const mid = T + (H - T - B) / 2;
+        const sc = (H - T - B) / 2 / m;
+        let s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="30分ごとの誤差">';
+        s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + mid + '" y2="' + mid + '" stroke="var(--line-strong)"/>';
+        s += '<text x="' + (L - 8) + '" y="' + (T + 10) + '" font-size="11" fill="var(--muted)" text-anchor="end">+' + Math.round(m) + "</text>";
+        s += '<text x="' + (L - 8) + '" y="' + (H - B) + '" font-size="11" fill="var(--muted)" text-anchor="end">−' + Math.round(m) + "</text>";
+        errs.forEach(function (e, i) {
+            if (e === null) return;
+            const h = Math.abs(e) * sc;
+            s += '<rect x="' + (L + i * bw + 2).toFixed(1) + '" y="' + (e >= 0 ? mid - h : mid).toFixed(1) + '" width="' + (bw - 4).toFixed(1) + '" height="' + Math.max(1, h).toFixed(1) + '" rx="2" fill="' + (e >= 0 ? "var(--pos)" : "var(--neg)") + '" opacity="0.8"><title>' + BINS[i] + " 実測−予報 " + (e > 0 ? "+" : "") + e + "人</title></rect>";
+        });
+        for (let i = 0; i < n; i += 4) {
+            s += '<text x="' + (L + (i + 0.5) * bw) + '" y="' + (H - 6) + '" font-size="11" fill="var(--muted)" text-anchor="middle">' + BINS[i] + "</text>";
+        }
+        return s + "</svg>";
+    }
+    function attachTooltip(wrap, d, geom) {
+        const svg = wrap.querySelector("svg");
+        const tip = wrap.querySelector(".tooltip");
+        const hit = svg.querySelector(".hit");
+        const cursor = svg.querySelector(".cursor");
+        hit.addEventListener("mousemove", function (ev) {
+            const pt = svg.createSVGPoint();
+            pt.x = ev.clientX; pt.y = ev.clientY;
+            const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+            const i = Math.max(0, Math.min(geom.n - 1, Math.floor((p.x - geom.L) / ((geom.W - geom.L - geom.R) / geom.n))));
+            const cx = geom.L + (geom.W - geom.L - geom.R) * (i + 0.5) / geom.n;
+            cursor.setAttribute("x1", cx); cursor.setAttribute("x2", cx); cursor.setAttribute("visibility", "visible");
+            const a = d.actual ? d.actual[i] : null;
+            let html = "<b>" + BINS[i] + "〜</b>予報 " + d.forecast[i].toLocaleString() + "人";
+            if (a !== null && a !== undefined) html += "<br>実測 " + a.toLocaleString() + "人<br>誤差 " + (a - d.forecast[i] > 0 ? "+" : "") + (a - d.forecast[i]) + "人";
+            tip.innerHTML = html;
+            tip.style.display = "block";
+            const rect = wrap.getBoundingClientRect();
+            let left = ev.clientX - rect.left + 14;
+            if (left > rect.width - 140) left = ev.clientX - rect.left - 140;
+            tip.style.left = left + "px";
+            tip.style.top = (ev.clientY - rect.top - 10) + "px";
+        });
+        hit.addEventListener("mouseleave", function () { tip.style.display = "none"; cursor.setAttribute("visibility", "hidden"); });
+    }
+    function sparkline(d) {
+        const max = 2600;
+        const pts = d.forecast.map(function (v, i) { return (i * 120 / (BINS.length - 1)).toFixed(1) + "," + (21 - v / max * 20).toFixed(1); }).join(" ");
+        return '<svg class="spark" viewBox="0 0 120 22" preserveAspectRatio="none"><polyline points="' + pts + '" fill="none" stroke="var(--forecast)" stroke-width="1.5"/></svg>';
+    }
+
+    // ===== 表示部品 =====
+    function weekTag(c) { return c.status === "closed" ? (c.reason || "授業なし") : "秋学期 第" + c.week + "週"; }
+    function recentMae(days) {
+        const list = [];
+        for (let i = 1; list.length < days && i < 60; i += 1) {
+            const dd = addDays(NOW.date, -i);
+            if (dd < FIRST) break;
+            const x = dayData(dd);
+            if (x.isClassDay && x.mae != null) list.push(x.mae);
+        }
+        return list.length ? list.reduce(function (a, b) { return a + b; }, 0) / list.length : null;
+    }
+    function busSection(date, fromHour, showNow) {
+        const rows = busTable(date, fromHour, Math.min(21, fromHour + 4));
+        const d = dayData(date);
+        function block(key, title) {
+            let html = '<div class="bus-dir"><h3>' + title + "</h3>";
+            if (showNow) {
+                const i = Math.floor((NOW.minute - BIN_START) / BIN_MIN) - 1;
+                const stay = d.actual[i];
+                const hi = Math.floor(NOW.minute / 60) - 7;
+                const n = key === "leave" ? BUS.toShonandai[hi] : BUS.toSfc[hi];
+                const cap = Math.round(n * 0.75 * 70 + n * 0.25 * 125);
+                const demand = key === "leave" ? Math.round(stay * 0.3 * 0.45) : Math.round(Math.max(0, (stay - d.actual[i - 1])) * 2 * 0.45);
+                const lv = level(demand, cap);
+                html += '<div class="bus-now"><span>いま（現行の計算）　需要 約' + demand + "人 ／ 輸送力 " + cap + "人</span>" +
+                    '<span class="chip ' + lv.cls + '">' + lv.label + "</span></div>";
+            }
+            html += '<table class="bus"><tr><th>時間帯</th><th>本数</th><th>輸送力</th><th>需要の目安</th><th>混み具合</th></tr>';
+            rows.forEach(function (r) {
+                const x = r[key];
+                const lv = level(x.demand, x.cap);
+                html += "<tr><td>" + r.hour + ":00〜</td><td>" + x.n + "本</td><td>" + x.cap + "人</td><td>約" + x.demand + "人</td><td><span class=\"chip " + lv.cls + '">' + lv.label + (lv.ratio != null ? " " + Math.round(lv.ratio * 100) + "%" : "") + "</span></td></tr>";
+            });
+            return html + "</table></div>";
+        }
+        return '<div class="bus-grid">' + block("leave", "SFC → 湘南台（帰り）") + block("come", "湘南台 → SFC（来る）") + "</div>" +
+            '<p class="caveat">需要の目安 ＝ 予報の人数の増減と入れ替わりから計算（バス利用率 0.45 などの係数は仮置きで、正解データでは検証していません）。輸送力は時刻表の本数 × 定員。</p>';
+    }
+    function calendar() {
+        let html = '<div class="cal">';
+        ["月", "火", "水", "木", "金", "土", "日"].forEach(function (w) { html += '<div class="dow">' + w + "</div>"; });
+        let cur = FIRST;
+        let month = -1;
+        while (cur <= LAST) {
+            const dt = parseDate(cur);
+            if (dt.getUTCMonth() !== month) {
+                month = dt.getUTCMonth();
+                html += '<div class="month">' + (month + 1) + "月</div>";
+                const offset = (dt.getUTCDay() + 6) % 7;
+                for (let k = 0; k < offset; k += 1) html += '<div class="blank"></div>';
+            }
+            const x = dayData(cur);
+            const isFuture = cur > NOW.date;
+            const value = x.actual && cur < NOW.date ? Math.max.apply(null, x.actual) : x.peak;
+            let style = "", cls = "day";
+            if (!x.isClassDay) cls += " closed";
+            else {
+                const sh = shade(value);
+                style = "background-color:" + SHADE_COLOR[sh] + ";" + (sh === 3 ? "color:#fff;" : "");
+            }
+            if (isFuture) cls += " future";
+            if (cur === NOW.date) cls += " today";
+            html += '<a class="' + cls + '" style="' + style + '" href="#/day/' + cur + '" title="' + label(cur) + " " + weekTag(x.cal) + '">' +
+                '<span class="d">' + dt.getUTCDate() + "</span>" +
+                (x.isClassDay ? '<span class="p">' + value.toLocaleString() + "</span>" : "") + "</a>";
+            const next = addDays(cur, 1);
+            if (parseDate(next).getUTCMonth() !== month) {
+                const rest = (7 - ((parseDate(cur).getUTCDay() + 6) % 7 + 1)) % 7;
+                for (let k = 0; k < rest; k += 1) html += '<div class="blank"></div>';
+            }
+            cur = next;
+        }
+        html += "</div>";
+        html += '<div class="scale">色：<span class="sw" style="background:var(--shade-1)"></span>少なめ<span class="sw" style="background:var(--shade-2)"></span>ふつう<span class="sw" style="background:var(--shade-3)"></span>多め' +
+            "</div><div class=\"scale\">色の基準：今後1か月の予報ピークの三分位<br>数字：過去は実測ピーク、今日以降は予報ピーク／斜線：未来</div>";
+        return html;
+    }
+
+    // ===== ページ: トップ =====
+    function renderHome() {
+        const d = dayData(NOW.date);
+        const nowIdx = Math.floor((NOW.minute - BIN_START) / BIN_MIN) - 1;
+        const current = d.actual[nowIdx];
+        const in1h = d.forecast[nowIdx + 2];
+        const diff = in1h - current;
+        const mae7 = recentMae(7);
+        const chart = lineChart(d, { nowMinute: NOW.minute, height: 320 });
+
+        let list = "";
+        let lastWeek = null;
+        for (let i = 1; i <= 31; i += 1) {
+            const dd = addDays(NOW.date, i);
+            if (dd > LAST) break;
+            const x = dayData(dd);
+            const wk = x.cal.week;
+            const rowCls = ["row"];
+            if (!x.isClassDay) rowCls.push("closed");
+            if (x.isClassDay && wk !== lastWeek && lastWeek !== null) rowCls.push("week-start");
+            if (x.isClassDay) lastWeek = wk;
+            if (!x.isClassDay) {
+                list += '<tr class="' + rowCls.join(" ") + '" data-date="' + dd + '"><td>' + label(dd) + "</td><td>" + weekTag(x.cal) + '</td><td colspan="3">約' + x.peak + "人（授業なし）</td></tr>";
+                continue;
+            }
+            const sh = shade(x.peak);
+            list += '<tr class="' + rowCls.join(" ") + '" data-date="' + dd + '"><td>' + label(dd) + "</td><td>第" + wk + "週</td>" +
+                '<td><div class="peakbar"><span>' + x.peak.toLocaleString() + '人</span><div class="bar" style="width:' + Math.round(x.peak / 2600 * 160) + "px;background:" + SHADE_COLOR[sh] + '"></div></div></td>' +
+                "<td>" + minToStr(BIN_START + x.peakIdx * BIN_MIN) + "ごろ</td><td>" + sparkline(x) + "</td></tr>";
+        }
+
+        document.getElementById("app").innerHTML =
+            '<div class="kpis">' +
+                '<div class="kpi"><div class="label">いまの人数（実測）</div><div class="value">' + current.toLocaleString() + '<small>人</small></div><div class="note">' + minToStr(BIN_START + nowIdx * BIN_MIN) + "〜 の30分平均</div></div>" +
+                '<div class="kpi"><div class="label">1時間後（予報）</div><div class="value">' + in1h.toLocaleString() + '<small>人</small></div><div class="note">いまより ' + (diff >= 0 ? "+" : "") + diff.toLocaleString() + "人</div></div>" +
+                '<div class="kpi"><div class="label">今日のピーク（予報）</div><div class="value">' + d.peak.toLocaleString() + '<small>人</small></div><div class="note">' + minToStr(BIN_START + d.peakIdx * BIN_MIN) + 'ごろ <span class="shade-chip s' + shade(d.peak) + '">' + SHADE_LABEL[shade(d.peak)] + "</span></div></div>" +
+                '<div class="kpi"><div class="label">予報の誤差（直近7授業日の平均）</div><div class="value">±' + Math.round(mae7) + '<small>人</small></div><div class="note">前日夜の予報と実測の差の絶対値</div></div>' +
+            "</div>" +
+            '<section class="card"><h2>今日の人数　' + label(NOW.date) + ' <span style="font-weight:normal;color:var(--muted);font-size:0.8em">' + weekTag(d.cal) + "</span></h2>" +
+                '<p class="sub">30分ごと。グラフにマウスを乗せると値が出ます。<a href="#/day/' + NOW.date + '">この日の詳細 →</a></p>' +
+                '<div class="chart-wrap" id="mainChart">' + chart.svg + '<div class="tooltip"></div></div>' +
+                '<div class="legend"><span><i class="a"></i>実測</span><span><i class="f"></i>予報（前日夜に作成）</span><span><i class="n"></i>現在時刻</span></div>' +
+            "</section>" +
+            '<div class="grid-2">' +
+                '<section class="card"><h2>今後の予報</h2><p class="sub">1か月先まで。行をクリックすると日別ページへ移動します。</p>' +
+                    '<div class="list-scroll"><table class="list"><tr><th>日付</th><th>学期</th><th>ピーク人数</th><th>ピーク時刻</th><th>1日の形</th></tr>' + list + "</table></div></section>" +
+                '<section class="card"><h2>カレンダー</h2><p class="sub">過去の日も含めて、日付をクリックすると日別ページへ。</p>' + calendar() + "</section>" +
+            "</div>" +
+            '<section class="card"><h2>バスの混雑（参考）</h2><p class="sub">キャンパス人数の予報と時刻表から計算した目安です。</p>' + busSection(NOW.date, Math.floor(NOW.minute / 60), true) + "</section>";
+
+        attachTooltip(document.getElementById("mainChart"), d, chart.geom);
+        document.querySelectorAll("tr.row").forEach(function (tr) {
+            tr.addEventListener("click", function () { location.hash = "#/day/" + tr.dataset.date; });
+        });
+    }
+
+    // ===== ページ: 日別 =====
+    function renderDay(date) {
+        if (!REAL.calendar[date]) { location.hash = "#/"; return; }
+        const d = dayData(date);
+        const isToday = date === NOW.date;
+        const isPast = date < NOW.date;
+        const chart = lineChart(d, { nowMinute: isToday ? NOW.minute : null, height: 340 });
+        const prev = addDays(date, -1), next = addDays(date, 1);
+        const actualPeak = d.actual ? Math.max.apply(null, d.actual.filter(function (v) { return v !== null; })) : null;
+
+        let kpis = '<div class="kpis">' +
+            '<div class="kpi"><div class="label">ピーク（予報）</div><div class="value">' + d.peak.toLocaleString() + '<small>人</small></div><div class="note">' + minToStr(BIN_START + d.peakIdx * BIN_MIN) + "ごろ" + (d.isClassDay ? ' <span class="shade-chip s' + shade(d.peak) + '">' + SHADE_LABEL[shade(d.peak)] + "</span>" : "") + "</div></div>";
+        if (d.actual) {
+            kpis += '<div class="kpi"><div class="label">ピーク（実測）</div><div class="value">' + actualPeak.toLocaleString() + '<small>人</small></div><div class="note">' + (isToday ? "いままでの最大" : "この日の最大") + "</div></div>" +
+                '<div class="kpi"><div class="label">この日の平均誤差</div><div class="value">±' + Math.round(d.mae) + '<small>人</small></div><div class="note">' + (isToday ? "いままでの30分枠で計算" : "30分枠の誤差の絶対値の平均") + "</div></div>";
+        } else {
+            kpis += '<div class="kpi"><div class="label">ピーク（実測）</div><div class="value" style="color:var(--faint)">—</div><div class="note">まだ来ていない日です</div></div>' +
+                '<div class="kpi"><div class="label">この日の平均誤差</div><div class="value" style="color:var(--faint)">—</div><div class="note">実測がたまると表示</div></div>';
+        }
+        kpis += '<div class="kpi"><div class="label">予報を作った時点</div><div class="value" style="font-size:1.2em;padding:6px 0">' + label(addDays(date, -1)) + " 22:00</div><div class=\"note\">前日夜の予報を保存して比較</div></div></div>";
+
+        document.getElementById("app").innerHTML =
+            '<div class="day-nav">' +
+                '<a class="btn" href="#/day/' + prev + '"' + (prev < FIRST ? ' aria-disabled="true"' : "") + ">← " + label(prev) + "</a>" +
+                "<h2>" + label(date) + '<span class="tag">' + weekTag(d.cal) + (isToday ? "・今日" : isPast ? "・過去" : "・予報") + "</span></h2>" +
+                '<a class="btn" href="#/day/' + next + '"' + (next > LAST ? ' aria-disabled="true"' : "") + ">" + label(next) + " →</a>" +
+            "</div>" +
+            (d.isClassDay ? "" : '<div class="notice">学事暦ではこの日は「' + (d.cal.reason || "授業なし") + "」です。予報は授業以外の人（ベース）だけになります。</div>") +
+            kpis +
+            '<section class="card"><h2>人数の推移</h2><p class="sub">' + (d.actual ? "実測（実線）と、前日夜に作った予報（点線）を重ねています。" : "予報（点線）のみ。当日になると実測が重なります。") + "</p>" +
+                '<div class="chart-wrap" id="dayChart">' + chart.svg + '<div class="tooltip"></div></div>' +
+                '<div class="legend"><span><i class="a"></i>実測</span><span><i class="f"></i>予報</span>' + (isToday ? '<span><i class="n"></i>現在時刻</span>' : "") + "</div>" +
+            "</section>" +
+            (d.actual ? '<section class="card"><h2>30分ごとの誤差</h2><p class="sub">実測 − 予報。<span style="color:var(--pos)">赤</span>＝予報より多かった、<span style="color:var(--neg)">青</span>＝予報より少なかった。</p>' + errorChart(d) + "</section>" : "") +
+            (d.isClassDay ? '<section class="card"><h2>この日のバスの目安</h2><p class="sub">8時台〜19時台。キャンパス人数の予報と時刻表から計算。</p>' + busSectionRange(date, 8, 19) + "</section>" : "");
+
+        attachTooltip(document.getElementById("dayChart"), d, chart.geom);
+        window.scrollTo(0, 0);
+    }
+    function busSectionRange(date, from, to) {
+        const rows = busTable(date, from, to);
+        function block(key, title) {
+            let html = '<div class="bus-dir"><h3>' + title + '</h3><table class="bus"><tr><th>時間帯</th><th>本数</th><th>輸送力</th><th>需要の目安</th><th>混み具合</th></tr>';
+            rows.forEach(function (r) {
+                const x = r[key];
+                const lv = level(x.demand, x.cap);
+                html += "<tr><td>" + r.hour + ":00〜</td><td>" + x.n + "本</td><td>" + x.cap + "人</td><td>約" + x.demand + "人</td><td><span class=\"chip " + lv.cls + '">' + lv.label + (lv.ratio != null ? " " + Math.round(lv.ratio * 100) + "%" : "") + "</span></td></tr>";
+            });
+            return html + "</table></div>";
+        }
+        return '<div class="bus-grid">' + block("leave", "SFC → 湘南台（帰り）") + block("come", "湘南台 → SFC（来る）") + "</div>" +
+            '<p class="caveat">需要の目安の係数は仮置きで、正解データでは検証していません。</p>';
+    }
+
+    // ===== ルーティング =====
+    function route() {
+        const m = location.hash.match(/^#\/day\/(\d{4}-\d{2}-\d{2})$/);
+        if (m) renderDay(m[1]); else renderHome();
+    }
+    document.getElementById("nowLabel").textContent = label(NOW.date) + " " + minToStr(NOW.minute);
+    document.getElementById("updated").textContent = "最終更新 " + label(NOW.date) + " " + minToStr(NOW.minute - NOW.minute % 5);
+    window.addEventListener("hashchange", route);
+    route();
+    </script>
+</body>
+</html>
