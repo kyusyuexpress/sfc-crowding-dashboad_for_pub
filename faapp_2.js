@@ -71,6 +71,7 @@ function loadClassroomInfo() {
         path.join(__dirname, "sfc_classrooms.json"),
         path.join(__dirname, "kyousitu_size.json"),
         path.join(__dirname, "staticfile_public", "sfc_classrooms.json"),
+        path.join(__dirname, "example-data", "kyousitu_size.json"),
         path.join(__dirname, "staticfile_public", "kyousitu_size.json")
     ].filter(Boolean);
 
@@ -97,7 +98,8 @@ function loadInboundBusTimetable() {
             __dirname,
             "staticfile_public",
             "kanachu_jikoku_from_shonandai.json"
-        )
+        ),
+        path.join(__dirname, "example-data", "kanachu_jikoku_from_shonandai.json")
     ].filter(Boolean);
 
     const filePath = candidates.find(function (candidate) {
@@ -462,19 +464,19 @@ function estimateCampusPopulation(crowdData, averageDevicesPerPerson) {
     });
 
     const availableReadings = buildingReadings.filter(function (reading) {
-        return Number.isFinite(reading.apClientCount);
+        return Number.isFinite(reading.clientCount);
     });
 
     const connectedDeviceCount = availableReadings.reduce(
         function (total, reading) {
-            return total + reading.apClientCount;
+            return total + reading.clientCount;
         },
         0
     );
 
     const unavailableBuildings = buildingReadings
         .filter(function (reading) {
-            return !Number.isFinite(reading.apClientCount);
+            return !Number.isFinite(reading.clientCount);
         })
         .map(function (reading) {
             return reading.buildingKey;
@@ -771,8 +773,8 @@ function normalizeCrowdObservation(state, crowdData, fetchedAt) {
     buildingReadings.forEach(function (reading) {
         state.knownBuildingKeys.add(reading.buildingKey);
 
-        if (Number.isFinite(reading.apClientCount)) {
-            observedBuildings[reading.buildingKey] = reading.apClientCount;
+        if (Number.isFinite(reading.clientCount)) {
+            observedBuildings[reading.buildingKey] = reading.clientCount;
         } else {
             unavailableFromApi.add(reading.buildingKey);
         }
