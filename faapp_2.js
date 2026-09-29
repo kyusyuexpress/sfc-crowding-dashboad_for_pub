@@ -464,19 +464,19 @@ function estimateCampusPopulation(crowdData, averageDevicesPerPerson) {
     });
 
     const availableReadings = buildingReadings.filter(function (reading) {
-        return Number.isFinite(reading.ClientCount);
+        return Number.isFinite(reading.clientCount);
     });
 
     const connectedDeviceCount = availableReadings.reduce(
         function (total, reading) {
-            return total + reading.ClientCount;
+            return total + reading.clientCount;
         },
         0
     );
 
     const unavailableBuildings = buildingReadings
         .filter(function (reading) {
-            return !Number.isFinite(reading.ClientCount);
+            return !Number.isFinite(reading.clientCount);
         })
         .map(function (reading) {
             return reading.buildingKey;
@@ -773,8 +773,8 @@ function normalizeCrowdObservation(state, crowdData, fetchedAt) {
     buildingReadings.forEach(function (reading) {
         state.knownBuildingKeys.add(reading.buildingKey);
 
-        if (Number.isFinite(reading.ClientCount)) {
-            observedBuildings[reading.buildingKey] = reading.ClientCount;
+        if (Number.isFinite(reading.clientCount)) {
+            observedBuildings[reading.buildingKey] = reading.clientCount;
         } else {
             unavailableFromApi.add(reading.buildingKey);
         }
